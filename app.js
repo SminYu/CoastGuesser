@@ -3,16 +3,34 @@ const LAND_DATA_URL = "data/ne_50m_land/ne_50m_land.shp";
 const ROUND_COUNT = 10;
 const MAX_ROUND_SCORE = 100;
 const EARTH_RADIUS_KM = 6371;
-const SCORE_DECAY_DISTANCE_KM = 5000;
 const SAMPLING_WEIGHT_EXPONENT = 0.3;
 const MIN_QUESTION_LATITUDE = -65;
 const MAX_QUESTION_LATITUDE = 65;
-const QUESTION_WIDTH_KM = 1000;
-const MIN_COASTLINE_LENGTH_KM = 100;
 const MIN_ROUND_SEPARATION_KM = 1500;
 const MIN_RECENT_SEPARATION_KM = 1000;
 const RECENT_QUESTION_LIMIT = 40;
 const RECENT_QUESTION_STORAGE_KEY = "coastguesser-recent-questions";
+
+const DIFFICULTIES = {
+  easy: {
+    label: "쉬움",
+    widthKm: 1500,
+    minCoastlineLengthKm: 300,
+    scoreDecayDistanceKm: 6000
+  },
+  normal: {
+    label: "보통",
+    widthKm: 1000,
+    minCoastlineLengthKm: 100,
+    scoreDecayDistanceKm: 5000
+  },
+  hard: {
+    label: "어려움",
+    widthKm: 600,
+    minCoastlineLengthKm: 50,
+    scoreDecayDistanceKm: 4000
+  }
+};
 
 const state = {
   round: 0,
@@ -20,7 +38,10 @@ const state = {
   guess: null,
   answered: false,
   ready: false,
+  hasStarted: false,
+  difficultyKey: "normal",
   rounds: [],
+  coastSource: null,
   coast: null,
   land: null
 };
@@ -125,10 +146,10 @@ function parseShapeData(buffer, expectedShapeType) {
   return { buffer, view, lines, totalLength };
 }
 
-function prepareCoastlineSamplingPool(dataset) {
+function prepareCoastlineSamplingPool(dataset, minimumLengthKm) {
   let totalSamplingWeight = 0;
   const samplingLines = dataset.lines
-    .filter((line) => line.length >= MIN_COASTLINE_LENGTH_KM)
+    .filter((line) => line.length >= minimumLengthKm)
     .map((line) => {
       const samplingWeight = Math.pow(line.length, SAMPLING_WEIGHT_EXPONENT);
       totalSamplingWeight += samplingWeight;
@@ -182,7 +203,7 @@ function randomCoastalPoint() {
         const lat = lat1 + (lat2 - lat1) * ratio;
         if (lat < MIN_QUESTION_LATITUDE || lat > MAX_QUESTION_LATITUDE) break;
 
-        const widthKm = QUESTION_WIDTH_KM;
+        const widthKm = DIFFICULTIES[state.difficultyKey].widthKm;
         const offsetXKm = (Math.random() - 0.5) * widthKm * 0.18;
         const offsetYKm = (Math.random() - 0.5) * widthKm * 0.12;
         const cosLat = Math.max(0.08, Math.cos(lat * Math.PI / 180));
@@ -453,7 +474,8 @@ function haversine(a, b) {
 }
 
 function scoreForDistance(distance) {
-  return Math.round(MAX_ROUND_SCORE * Math.exp(-distance / SCORE_DECAY_DISTANCE_KM));
+  const decayDistance = DIFFICULTIES[state.difficultyKey].scoreDecayDistanceKm;
+  return Math.round(MAX_ROUND_SCORE * Math.exp(-distance / decayDistance));
 }
 
 function currentLocation() {
@@ -550,8 +572,9 @@ function revealAnswer() {
   );
 
   $("#resultName").textContent = formatCoordinate(answer);
+  $("#resultDifficulty").textContent = DIFFICULTIES[state.difficultyKey].label;
   $("#resultFact").textContent =
-    `Natural Earth 1:50m 실제 해안선 · 화면 폭 ${Math.round(answer.widthKm)} km`;
+    `Natural Earth 1:50m 실제 해안선 · ${DIFFICULTIES[state.difficultyKey].label} · 화면 폭 ${Math.round(answer.widthKm)} km`;
   $("#resultDistance").textContent = `${Math.round(distance).toLocaleString("ko-KR")} km`;
   $("#roundScore").textContent = roundScore.toLocaleString("ko-KR");
   $("#nextButton span:first-child").textContent =
@@ -574,6 +597,7 @@ function nextRound() {
 function showEndScreen() {
   $("#resultDrawer").classList.remove("open");
   $("#finalScore").textContent = state.score.toLocaleString("ko-KR");
+  $("#endDifficulty").textContent = DIFFICULTIES[state.difficultyKey].label;
   const ratio = state.score / (ROUND_COUNT * MAX_ROUND_SCORE);
   $("#endMessage").textContent = ratio > 0.75
     ? "놀라운 해안 감각입니다. 전 세계의 작은 곡선까지 정확히 읽어냈어요."
@@ -583,12 +607,36 @@ function showEndScreen() {
   $("#endModal").hidden = false;
 }
 
-function startGame() {
+function updateDifficultySelection() {
+  document.querySelectorAll("[data-difficulty]").forEach((button) => {
+    const selected = button.dataset.difficulty === state.difficultyKey;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+}
+
+function openDifficultyModal() {
+  updateDifficultySelection();
+  $("#difficultyModal").hidden = false;
+  $("#closeDifficulty").hidden = !state.hasStarted;
+}
+
+function startGame(difficultyKey = state.difficultyKey) {
   if (!state.ready) return;
+  state.difficultyKey = difficultyKey;
+  const difficulty = DIFFICULTIES[difficultyKey];
+  state.coast = prepareCoastlineSamplingPool(
+    state.coastSource,
+    difficulty.minCoastlineLengthKm
+  );
+  state.hasStarted = true;
   state.round = 0;
   state.score = 0;
   state.rounds = makeRandomRounds();
   $("#totalScore").textContent = "0";
+  $("#difficultyLabel").textContent = difficulty.label;
+  updateDifficultySelection();
+  $("#difficultyModal").hidden = true;
   $("#endModal").hidden = true;
   loadRound();
 }
@@ -606,13 +654,18 @@ async function initialize() {
       coastResponse.arrayBuffer(),
       landResponse.arrayBuffer()
     ]);
-    state.coast = prepareCoastlineSamplingPool(parseShapeData(coastBuffer, 3));
+    state.coastSource = parseShapeData(coastBuffer, 3);
+    state.coast = prepareCoastlineSamplingPool(
+      state.coastSource,
+      DIFFICULTIES[state.difficultyKey].minCoastlineLengthKm
+    );
     state.land = parseShapeData(landBuffer, 5);
     renderWorldMap();
     state.ready = true;
     $("#loadingState").classList.add("hidden");
     $("#mapWrap").classList.remove("is-loading");
-    startGame();
+    openDifficultyModal();
+    $("#closeDifficulty").hidden = true;
   } catch (error) {
     console.error("Coastline data failed to load:", error);
     $("#loadingState").textContent = "해안선 데이터를 불러오지 못했습니다. 로컬 서버로 실행해 주세요.";
@@ -624,7 +677,18 @@ worldMap.addEventListener("click", placeGuess);
 $("#resetPin").addEventListener("click", resetGuess);
 $("#guessButton").addEventListener("click", revealAnswer);
 $("#nextButton").addEventListener("click", nextRound);
-$("#restartButton").addEventListener("click", startGame);
+$("#restartButton").addEventListener("click", () => {
+  $("#endModal").hidden = true;
+  openDifficultyModal();
+});
+
+$("#difficultyButton").addEventListener("click", openDifficultyModal);
+$("#closeDifficulty").addEventListener("click", () => {
+  if (state.hasStarted) $("#difficultyModal").hidden = true;
+});
+document.querySelectorAll("[data-difficulty]").forEach((button) => {
+  button.addEventListener("click", () => startGame(button.dataset.difficulty));
+});
 
 $("#helpButton").addEventListener("click", () => {
   $("#helpModal").hidden = false;
@@ -640,7 +704,10 @@ $("#helpModal").addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") $("#helpModal").hidden = true;
+  if (event.key === "Escape") {
+    $("#helpModal").hidden = true;
+    if (state.hasStarted) $("#difficultyModal").hidden = true;
+  }
   if (event.key === "Enter" && state.guess && !state.answered) revealAnswer();
 });
 

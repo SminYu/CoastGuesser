@@ -8,7 +8,7 @@
       content="실제 전 세계 해안선 크롭만 보고 위치를 맞히는 지도 추리 게임"
     />
     <title>CoastGuesser</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=2" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -33,9 +33,15 @@
         </div>
       </div>
 
-      <button class="icon-button" id="helpButton" aria-label="게임 방법">
-        <span>?</span>
-      </button>
+      <div class="top-actions">
+        <button class="difficulty-button" id="difficultyButton" type="button">
+          <span>DIFFICULTY</span>
+          <strong id="difficultyLabel">보통</strong>
+        </button>
+        <button class="icon-button" id="helpButton" aria-label="게임 방법">
+          <span>?</span>
+        </button>
+      </div>
     </header>
 
     <main class="game-shell">
@@ -123,7 +129,7 @@
 
     <div class="result-drawer" id="resultDrawer" aria-live="polite">
       <div class="result-location">
-        <span class="result-kicker">COAST IDENTIFIED</span>
+        <span class="result-kicker">COAST IDENTIFIED · <b id="resultDifficulty">보통</b></span>
         <h2 id="resultName">정답 좌표</h2>
         <p id="resultFact">Natural Earth 실제 해안선에서 선택된 지점입니다.</p>
       </div>
@@ -140,6 +146,50 @@
       <button class="primary-button result-next" id="nextButton">
         <span>다음 해안선</span><span class="button-arrow">→</span>
       </button>
+    </div>
+
+    <div class="modal-backdrop" id="difficultyModal" hidden>
+      <section class="modal difficulty-modal" role="dialog" aria-modal="true" aria-labelledby="difficultyTitle">
+        <button class="modal-close" id="closeDifficulty" aria-label="닫기">×</button>
+        <p class="eyebrow">CHOOSE EXPEDITION</p>
+        <h2 id="difficultyTitle">난이도를 선택하세요</h2>
+        <p class="difficulty-intro">선택하면 새로운 10라운드 탐사가 시작됩니다.</p>
+        <div class="difficulty-grid">
+          <button class="difficulty-card" type="button" data-difficulty="easy">
+            <span class="difficulty-visual" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="difficulty-level">EASY</span>
+            <strong>쉬움</strong>
+            <p>넓은 지역과 큰 해안 중심</p>
+            <dl>
+              <div><dt>화면 폭</dt><dd>1,500km</dd></div>
+              <div><dt>최소 해안</dt><dd>300km</dd></div>
+              <div><dt>점수 감쇠</dt><dd>6,000km</dd></div>
+            </dl>
+          </button>
+          <button class="difficulty-card featured selected" type="button" data-difficulty="normal" aria-pressed="true">
+            <span class="difficulty-visual" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="difficulty-level">NORMAL</span>
+            <strong>보통</strong>
+            <p>균형 잡힌 기본 게임</p>
+            <dl>
+              <div><dt>화면 폭</dt><dd>1,000km</dd></div>
+              <div><dt>최소 해안</dt><dd>100km</dd></div>
+              <div><dt>점수 감쇠</dt><dd>5,000km</dd></div>
+            </dl>
+          </button>
+          <button class="difficulty-card" type="button" data-difficulty="hard">
+            <span class="difficulty-visual" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="difficulty-level">HARD</span>
+            <strong>어려움</strong>
+            <p>좁은 범위와 작은 섬 포함</p>
+            <dl>
+              <div><dt>화면 폭</dt><dd>600km</dd></div>
+              <div><dt>최소 해안</dt><dd>50km</dd></div>
+              <div><dt>점수 감쇠</dt><dd>4,000km</dd></div>
+            </dl>
+          </button>
+        </div>
+      </section>
     </div>
 
     <div class="modal-backdrop" id="helpModal" hidden>
@@ -164,16 +214,17 @@
         <p class="eyebrow">EXPEDITION COMPLETE</p>
         <div class="end-badge">◎</div>
         <h2 id="endTitle">해안 탐사 완료</h2>
+        <p class="end-difficulty">난이도 · <strong id="endDifficulty">보통</strong></p>
         <p id="endMessage">파도만 보고도 지도를 읽는 눈이 생겼네요.</p>
         <div class="final-score">
           <span>FINAL SCORE</span>
           <strong id="finalScore">0</strong>
           <small>/ 1,000</small>
         </div>
-        <button class="primary-button" id="restartButton">새 게임 시작</button>
+        <button class="primary-button" id="restartButton">난이도 선택 후 새 게임</button>
       </section>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=2"></script>
   </body>
 </html>

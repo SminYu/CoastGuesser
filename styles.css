@@ -145,7 +145,6 @@ button {
 }
 
 .icon-button {
-  justify-self: end;
   width: 35px;
   height: 35px;
   border: 1px solid var(--line);
@@ -153,6 +152,42 @@ button {
   background: transparent;
   cursor: pointer;
   transition: 180ms ease;
+}
+
+.top-actions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.difficulty-button {
+  min-height: 35px;
+  padding: 5px 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  transition: 180ms ease;
+}
+
+.difficulty-button span {
+  color: var(--muted);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 8px;
+  letter-spacing: 1.2px;
+}
+
+.difficulty-button strong {
+  color: var(--orange);
+  font-size: 12px;
+}
+
+.difficulty-button:hover {
+  border-color: var(--orange);
+  background: rgba(244, 95, 56, 0.07);
 }
 
 .icon-button:hover {
@@ -564,6 +599,10 @@ button {
   color: var(--teal);
 }
 
+.result-kicker b {
+  color: #f7f5ee;
+}
+
 .result-location h2 {
   margin: 4px 0 3px;
   font-size: 25px;
@@ -624,6 +663,7 @@ button {
   padding: 20px;
   background: rgba(5, 22, 20, 0.66);
   backdrop-filter: blur(8px);
+  overflow-y: auto;
 }
 
 .modal-backdrop[hidden] {
@@ -636,6 +676,195 @@ button {
   padding: 40px;
   background: #f8f6ef;
   box-shadow: 0 35px 90px rgba(0, 0, 0, 0.25);
+}
+
+.difficulty-modal {
+  width: min(820px, 100%);
+}
+
+.difficulty-intro {
+  margin: -14px 0 24px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.difficulty-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.difficulty-card {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  display: block;
+  min-width: 0;
+  padding: 22px 18px;
+  border: 1px solid var(--line);
+  text-align: left;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.38);
+  cursor: pointer;
+  transition: 180ms ease;
+}
+
+.difficulty-card::after {
+  content: "SELECT";
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: transparent;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.difficulty-card.selected::after {
+  content: "CURRENT";
+  padding: 3px 5px;
+  color: white;
+  background: var(--orange);
+}
+
+.difficulty-card:hover,
+.difficulty-card.featured:hover {
+  color: white;
+  border-color: var(--orange);
+  background: var(--orange);
+  transform: translateY(-4px);
+  box-shadow: 0 16px 30px rgba(244, 95, 56, 0.18);
+}
+
+.difficulty-card.featured {
+  border-color: rgba(244, 95, 56, 0.55);
+  background: rgba(244, 95, 56, 0.055);
+}
+
+.difficulty-card.selected {
+  box-shadow: inset 0 0 0 1px var(--orange);
+}
+
+.difficulty-visual {
+  position: relative;
+  height: 68px;
+  margin: -22px -18px 17px;
+  display: block;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background:
+    repeating-linear-gradient(0deg, transparent 0 15px, rgba(255, 255, 255, 0.11) 15px 16px),
+    #39818d;
+}
+
+.difficulty-visual::before {
+  content: "";
+  position: absolute;
+  inset: 17px -5px -4px -5px;
+  background: #8ea177;
+  filter: drop-shadow(0 -2px 0 rgba(245, 232, 192, 0.9));
+}
+
+[data-difficulty="easy"] .difficulty-visual::before {
+  clip-path: polygon(0 38%, 24% 36%, 48% 52%, 70% 45%, 100% 52%, 100% 100%, 0 100%);
+}
+
+[data-difficulty="normal"] .difficulty-visual::before {
+  clip-path: polygon(0 62%, 14% 38%, 28% 46%, 39% 25%, 53% 54%, 68% 35%, 80% 57%, 100% 30%, 100% 100%, 0 100%);
+}
+
+[data-difficulty="hard"] .difficulty-visual::before {
+  clip-path: polygon(0 76%, 12% 51%, 23% 70%, 33% 35%, 43% 62%, 53% 32%, 63% 68%, 76% 42%, 87% 70%, 100% 48%, 100% 100%, 0 100%);
+}
+
+.difficulty-visual i {
+  position: absolute;
+  z-index: 2;
+  width: 9px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a8b58a;
+  box-shadow: 0 0 0 2px rgba(245, 232, 192, 0.82);
+}
+
+.difficulty-visual i:nth-child(1) { top: 15px; right: 24%; }
+.difficulty-visual i:nth-child(2) { top: 30px; right: 12%; transform: scale(.7); }
+.difficulty-visual i:nth-child(3) { top: 12px; right: 48%; transform: scale(.55); }
+
+[data-difficulty="easy"] .difficulty-visual i {
+  display: none;
+}
+
+[data-difficulty="normal"] .difficulty-visual i:nth-child(2),
+[data-difficulty="normal"] .difficulty-visual i:nth-child(3) {
+  display: none;
+}
+
+.difficulty-card:hover .difficulty-visual {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.difficulty-level {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--orange);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+
+.difficulty-card:hover .difficulty-level {
+  color: white;
+}
+
+.difficulty-card > strong {
+  display: block;
+  font-size: 23px;
+}
+
+.difficulty-card > p {
+  min-height: 38px;
+  margin: 6px 0 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.difficulty-card:hover > p {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.difficulty-card dl {
+  margin: 0;
+}
+
+.difficulty-card dl div {
+  padding: 7px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 9px;
+}
+
+.difficulty-card:hover dl div {
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.difficulty-card dt {
+  color: var(--muted);
+}
+
+.difficulty-card:hover dt {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.difficulty-card dd {
+  margin: 0;
+  font-weight: 700;
 }
 
 .modal-close {
@@ -705,6 +934,17 @@ button {
   color: var(--muted);
 }
 
+.end-difficulty {
+  margin: -12px 0 18px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.end-difficulty strong {
+  color: var(--orange);
+}
+
 .final-score {
   margin: 28px 0;
   padding: 25px;
@@ -762,6 +1002,16 @@ button {
     gap: 12px;
   }
 
+  .difficulty-button {
+    width: 35px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .difficulty-button span {
+    display: none;
+  }
+
   .stat-label {
     display: none;
   }
@@ -811,6 +1061,28 @@ button {
 
   .modal {
     padding: 34px 25px 25px;
+  }
+
+  .modal-backdrop {
+    place-items: start center;
+  }
+
+  .difficulty-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .difficulty-card {
+    padding: 16px;
+  }
+
+  .difficulty-visual {
+    height: 58px;
+    margin: -16px -16px 13px;
+  }
+
+  .difficulty-card > p {
+    min-height: 0;
+    margin-bottom: 12px;
   }
 }
 
