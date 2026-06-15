@@ -8,6 +8,11 @@ const SAMPLING_WEIGHT_EXPONENT = 0.3;
 const MIN_QUESTION_LATITUDE = -70;
 const MAX_QUESTION_LATITUDE = 70;
 const QUESTION_WIDTH_KM = 1000;
+const MIN_COASTLINE_LENGTH_KM = 100;
+const MIN_ROUND_SEPARATION_KM = 1500;
+const MIN_RECENT_SEPARATION_KM = 1000;
+const RECENT_QUESTION_LIMIT = 40;
+const RECENT_QUESTION_STORAGE_KEY = "coastguesser-recent-questions";
 
 const state = {
   round: 0,
@@ -47,7 +52,6 @@ function parseShapeData(buffer, expectedShapeType) {
   const view = new DataView(buffer);
   const lines = [];
   let totalLength = 0;
-  let totalSamplingWeight = 0;
   let offset = 100;
 
   while (offset + 12 <= buffer.byteLength) {
@@ -100,9 +104,7 @@ function parseShapeData(buffer, expectedShapeType) {
           Math.abs(view.getFloat64(pointOffset, true) - view.getFloat64(lastOffset, true)) < 1e-8
           && Math.abs(view.getFloat64(pointOffset + 8, true) - view.getFloat64(lastOffset + 8, true)) < 1e-8;
 
-        const samplingWeight = Math.pow(length, SAMPLING_WEIGHT_EXPONENT);
         totalLength += length;
-        totalSamplingWeight += samplingWeight;
         lines.push({
           pointOffset,
           count,
@@ -112,8 +114,6 @@ function parseShapeData(buffer, expectedShapeType) {
           maxLat,
           length,
           cumulativeLength: totalLength,
-          samplingWeight,
-          cumulativeSamplingWeight: totalSamplingWeight,
           closed
         });
       }
@@ -122,11 +122,32 @@ function parseShapeData(buffer, expectedShapeType) {
     offset = recordEnd;
   }
 
-  return { buffer, view, lines, totalLength, totalSamplingWeight };
+  return { buffer, view, lines, totalLength };
+}
+
+function prepareCoastlineSamplingPool(dataset) {
+  let totalSamplingWeight = 0;
+  const samplingLines = dataset.lines
+    .filter((line) => line.length >= MIN_COASTLINE_LENGTH_KM)
+    .map((line) => {
+      const samplingWeight = Math.pow(line.length, SAMPLING_WEIGHT_EXPONENT);
+      totalSamplingWeight += samplingWeight;
+      return {
+        ...line,
+        samplingWeight,
+        cumulativeSamplingWeight: totalSamplingWeight
+      };
+    });
+
+  return {
+    ...dataset,
+    samplingLines,
+    totalSamplingWeight
+  };
 }
 
 function findWeightedLine(target) {
-  const lines = state.coast.lines;
+  const lines = state.coast.samplingLines;
   let low = 0;
   let high = lines.length - 1;
 
@@ -181,18 +202,52 @@ function randomCoastalPoint() {
   throw new Error("Failed to sample a coastline within the latitude limits.");
 }
 
+function loadRecentQuestions() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(RECENT_QUESTION_STORAGE_KEY) || "[]");
+    return Array.isArray(stored)
+      ? stored.filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentQuestions(rounds) {
+  const recent = [...loadRecentQuestions(), ...rounds]
+    .slice(-RECENT_QUESTION_LIMIT)
+    .map(({ lat, lng }) => ({ lat, lng }));
+  localStorage.setItem(RECENT_QUESTION_STORAGE_KEY, JSON.stringify(recent));
+}
+
 function makeRandomRounds() {
   const rounds = [];
+  const recentQuestions = loadRecentQuestions();
   let attempts = 0;
 
-  while (rounds.length < ROUND_COUNT && attempts < 100) {
+  while (rounds.length < ROUND_COUNT && attempts < 1000) {
     const candidate = randomCoastalPoint();
-    const separated = rounds.every((round) => haversine(round, candidate) > 450);
+    const separatedFromRound = rounds.every(
+      (round) => haversine(round, candidate) > MIN_ROUND_SEPARATION_KM
+    );
+    const separatedFromRecent = recentQuestions.every(
+      (round) => haversine(round, candidate) > MIN_RECENT_SEPARATION_KM
+    );
+    if (separatedFromRound && separatedFromRecent) rounds.push(candidate);
+    attempts += 1;
+  }
+
+  while (rounds.length < ROUND_COUNT && attempts < 2000) {
+    const candidate = randomCoastalPoint();
+    const separated = rounds.every(
+      (round) => haversine(round, candidate) > MIN_ROUND_SEPARATION_KM
+    );
     if (separated) rounds.push(candidate);
     attempts += 1;
   }
 
   while (rounds.length < ROUND_COUNT) rounds.push(randomCoastalPoint());
+  saveRecentQuestions(rounds);
   return rounds;
 }
 
@@ -551,7 +606,7 @@ async function initialize() {
       coastResponse.arrayBuffer(),
       landResponse.arrayBuffer()
     ]);
-    state.coast = parseShapeData(coastBuffer, 3);
+    state.coast = prepareCoastlineSamplingPool(parseShapeData(coastBuffer, 3));
     state.land = parseShapeData(landBuffer, 5);
     renderWorldMap();
     state.ready = true;
