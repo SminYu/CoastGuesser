@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="실제 전 세계 해안선 크롭만 보고 위치를 맞히는 지도 추리 게임"
+    />
+    <title>CoastGuesser</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="CoastGuesser 홈">
+        <span class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </span>
+        <span>COAST<span>GUESSER</span></span>
+      </a>
+
+      <div class="game-stats" aria-label="게임 현황">
+        <div>
+          <span class="stat-label">ROUND</span>
+          <strong><span id="roundNow">1</span><small>/10</small></strong>
+        </div>
+        <div class="stat-divider"></div>
+        <div>
+          <span class="stat-label">SCORE</span>
+          <strong id="totalScore">0</strong>
+        </div>
+      </div>
+
+      <button class="icon-button" id="helpButton" aria-label="게임 방법">
+        <span>?</span>
+      </button>
+    </header>
+
+    <main class="game-shell">
+      <section class="coast-panel" aria-labelledby="coastHeading">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">COASTAL FRAGMENT <span id="fragmentNumber">#01</span></p>
+            <h1 id="coastHeading">이 해안선은 어디일까요?</h1>
+          </div>
+          <div class="scan-status">
+            <span class="pulse"></span>
+            NATURAL EARTH · 1:50M
+          </div>
+        </div>
+
+        <div class="coast-frame">
+          <canvas id="coastCanvas" width="1920" height="1240"></canvas>
+          <div class="loading-state" id="loadingState">
+            <span class="loading-line"></span>
+            실제 해안선 데이터 불러오는 중
+          </div>
+          <div class="frame-corner top-left"></div>
+          <div class="frame-corner top-right"></div>
+          <div class="frame-corner bottom-left"></div>
+          <div class="frame-corner bottom-right"></div>
+          <div class="scale-bar"><span></span><b id="scaleLabel">100 KM</b></div>
+          <div class="coordinates">COORDINATES CLASSIFIED</div>
+        </div>
+
+        <p class="data-credit">
+          실제 Natural Earth 1:50m 해안선 벡터 · 매 라운드 전 세계 해안에서 무작위 추출
+        </p>
+      </section>
+
+      <section class="map-panel" aria-labelledby="mapHeading">
+        <div class="panel-heading map-heading">
+          <div>
+            <p class="eyebrow">TACTICAL MAP</p>
+            <h2 id="mapHeading">지도에서 위치를 선택하세요</h2>
+          </div>
+          <button class="text-button" id="resetPin" disabled>핀 초기화</button>
+        </div>
+
+        <div class="map-wrap is-loading" id="mapWrap">
+          <canvas id="worldBase" width="2000" height="1000" aria-hidden="true"></canvas>
+          <svg
+            id="worldMap"
+            viewBox="0 0 1000 500"
+            role="img"
+            aria-label="위치를 선택할 수 있는 실제 해안선 세계지도"
+          >
+            <defs>
+              <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                <path d="M 50 0 L 0 0 0 50" fill="none" stroke="currentColor" stroke-width="1" />
+              </pattern>
+              <filter id="mapGlow">
+                <feGaussianBlur stdDeviation="6" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
+            <rect class="map-grid" width="1000" height="500" />
+            <g id="resultLayer" class="result-layer"></g>
+            <g id="guessPin" class="guess-pin" visibility="hidden">
+              <circle class="pin-pulse" r="18"></circle>
+              <circle class="pin-ring" r="9"></circle>
+              <circle class="pin-core" r="3"></circle>
+            </g>
+          </svg>
+          <div class="map-instruction" id="mapInstruction">
+            <span>+</span> 클릭하여 핀 배치
+          </div>
+        </div>
+
+        <div class="selection-readout">
+          <span>SELECTED COORDINATES</span>
+          <strong id="selectedCoordinates">아직 선택하지 않았습니다</strong>
+        </div>
+
+        <button class="primary-button" id="guessButton" disabled>
+          <span id="guessButtonLabel">해안선 데이터 준비 중</span>
+          <span class="button-arrow">→</span>
+        </button>
+      </section>
+    </main>
+
+    <div class="result-drawer" id="resultDrawer" aria-live="polite">
+      <div class="result-location">
+        <span class="result-kicker">COAST IDENTIFIED</span>
+        <h2 id="resultName">정답 좌표</h2>
+        <p id="resultFact">Natural Earth 실제 해안선에서 선택된 지점입니다.</p>
+      </div>
+      <div class="result-numbers">
+        <div>
+          <span>DISTANCE</span>
+          <strong id="resultDistance">0 km</strong>
+        </div>
+        <div>
+          <span>ROUND SCORE</span>
+          <strong><b id="roundScore">0</b><small>/ 100</small></strong>
+        </div>
+      </div>
+      <button class="primary-button result-next" id="nextButton">
+        <span>다음 해안선</span><span class="button-arrow">→</span>
+      </button>
+    </div>
+
+    <div class="modal-backdrop" id="helpModal" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+        <button class="modal-close" id="closeHelp" aria-label="닫기">×</button>
+        <p class="eyebrow">FIELD MANUAL</p>
+        <h2 id="helpTitle">플레이 방법</h2>
+        <ol>
+          <li><b>관찰</b><span>실제 해안선의 곶, 만, 섬 배치를 자세히 살펴보세요.</span></li>
+          <li><b>추리</b><span>세계지도에서 가장 가능성 높은 지점을 클릭하세요.</span></li>
+          <li><b>채점</b><span>정답에 가까울수록 라운드당 최대 100점을 얻습니다.</span></li>
+        </ol>
+        <p class="modal-note">
+          문제 지점은 미리 정해진 목록이 아니라, 매 게임 전 세계 해안선 전체에서 새로 추출됩니다.
+        </p>
+        <button class="primary-button" id="startPlaying">탐사 시작</button>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="endModal" hidden>
+      <section class="modal end-modal" role="dialog" aria-modal="true" aria-labelledby="endTitle">
+        <p class="eyebrow">EXPEDITION COMPLETE</p>
+        <div class="end-badge">◎</div>
+        <h2 id="endTitle">해안 탐사 완료</h2>
+        <p id="endMessage">파도만 보고도 지도를 읽는 눈이 생겼네요.</p>
+        <div class="final-score">
+          <span>FINAL SCORE</span>
+          <strong id="finalScore">0</strong>
+          <small>/ 1,000</small>
+        </div>
+        <button class="primary-button" id="restartButton">새 게임 시작</button>
+      </section>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

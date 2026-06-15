@@ -1,0 +1,10 @@
+data/*.zip
+data/.gitkeep
+data/ne_10m_coastline/
+data/ne_10m_land/
+data/ne_50m_coastline/*
+!data/ne_50m_coastline/ne_50m_coastline.shp
+data/ne_50m_land/*
+!data/ne_50m_land/ne_50m_land.shp
+dist/
+tools/
