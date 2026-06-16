@@ -8,7 +8,7 @@
       content="실제 전 세계 해안선 크롭만 보고 위치를 맞히는 지도 추리 게임"
     />
     <title>CoastGuesser</title>
-    <link rel="stylesheet" href="styles.css?v=2" />
+    <link rel="stylesheet" href="styles.css?v=3" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -30,6 +30,11 @@
         <div>
           <span class="stat-label">SCORE</span>
           <strong id="totalScore">0</strong>
+        </div>
+        <div class="stat-divider"></div>
+        <div>
+          <span class="stat-label">TIME</span>
+          <strong id="gameTimer">00분 00초</strong>
         </div>
       </div>
 
@@ -224,10 +229,14 @@
           <strong id="finalScore">0</strong>
           <small>/ 1,000</small>
         </div>
+        <div class="final-time">
+          <span>PLAY TIME</span>
+          <strong id="finalTime">00분 00초</strong>
+        </div>
         <button class="primary-button" id="restartButton">난이도 선택 후 새 게임</button>
       </section>
     </div>
 
-    <script src="app.js?v=2"></script>
+    <script src="app.js?v=3"></script>
   </body>
 </html>

@@ -43,6 +43,9 @@ const state = {
   answered: false,
   ready: false,
   hasStarted: false,
+  timerId: null,
+  timerStartedAt: null,
+  elapsedMs: 0,
   difficultyKey: "normal",
   rounds: [],
   coastSource: null,
@@ -537,6 +540,41 @@ function currentLocation() {
   return state.rounds[state.round];
 }
 
+function formatElapsedTime(milliseconds) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}분 ${String(seconds).padStart(2, "0")}초`;
+}
+
+function currentElapsedMs() {
+  if (!state.timerStartedAt) return state.elapsedMs;
+  return Date.now() - state.timerStartedAt;
+}
+
+function updateTimerDisplay() {
+  $("#gameTimer").textContent = formatElapsedTime(currentElapsedMs());
+}
+
+function stopGameTimer() {
+  state.elapsedMs = currentElapsedMs();
+  state.timerStartedAt = null;
+  if (state.timerId) {
+    clearInterval(state.timerId);
+    state.timerId = null;
+  }
+  updateTimerDisplay();
+  return state.elapsedMs;
+}
+
+function startGameTimer() {
+  stopGameTimer();
+  state.elapsedMs = 0;
+  state.timerStartedAt = Date.now();
+  updateTimerDisplay();
+  state.timerId = setInterval(updateTimerDisplay, 1000);
+}
+
 function loadRound() {
   state.guess = null;
   state.answered = false;
@@ -596,6 +634,7 @@ function revealAnswer() {
   const roundScore = scoreForDistance(distance);
   state.score += roundScore;
   $("#totalScore").textContent = state.score.toLocaleString("ko-KR");
+  if (state.round === state.rounds.length - 1) stopGameTimer();
 
   const guessPoint = latLngToMap(state.guess.lat, state.guess.lng);
   const answerPoint = latLngToMap(answer.lat, answer.lng);
@@ -651,7 +690,9 @@ function nextRound() {
 
 function showEndScreen() {
   $("#resultDrawer").classList.remove("open");
+  if (state.timerStartedAt) stopGameTimer();
   $("#finalScore").textContent = state.score.toLocaleString("ko-KR");
+  $("#finalTime").textContent = formatElapsedTime(state.elapsedMs);
   $("#endDifficulty").textContent = DIFFICULTIES[state.difficultyKey].label;
   const ratio = state.score / (ROUND_COUNT * MAX_ROUND_SCORE);
   $("#endMessage").textContent = ratio > 0.75
@@ -689,10 +730,12 @@ function startGame(difficultyKey = state.difficultyKey) {
   state.score = 0;
   state.rounds = makeRandomRounds();
   $("#totalScore").textContent = "0";
+  $("#finalTime").textContent = formatElapsedTime(0);
   $("#difficultyLabel").textContent = difficulty.label;
   updateDifficultySelection();
   $("#difficultyModal").hidden = true;
   $("#endModal").hidden = true;
+  startGameTimer();
   loadRound();
 }
 

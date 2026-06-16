@@ -120,7 +120,8 @@ button {
 .selection-readout span,
 .result-kicker,
 .result-numbers span,
-.final-score span {
+.final-score span,
+.final-time span {
   font-family: Consolas, "Courier New", monospace;
   font-size: 10px;
   font-weight: 700;
@@ -962,6 +963,23 @@ button {
 
 .final-score small {
   color: var(--muted);
+}
+
+.final-time {
+  margin: -10px 0 28px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  background: rgba(56, 199, 186, 0.08);
+}
+
+.final-time span {
+  display: block;
+}
+
+.final-time strong {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 24px;
+  color: var(--deep-teal);
 }
 
 @media (max-width: 1020px) {
