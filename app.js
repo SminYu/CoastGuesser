@@ -8,6 +8,7 @@ const MIN_QUESTION_LATITUDE = -65;
 const MAX_QUESTION_LATITUDE = 65;
 const MIN_ROUND_SEPARATION_KM = 1500;
 const MIN_RECENT_SEPARATION_KM = 1000;
+const LAND_RATIO_SAMPLE_WIDTH = 160;
 const RECENT_QUESTION_LIMIT = 40;
 const RECENT_QUESTION_STORAGE_KEY = "coastguesser-recent-questions";
 
@@ -16,19 +17,22 @@ const DIFFICULTIES = {
     label: "쉬움",
     widthKm: 1500,
     minCoastlineLengthKm: 300,
-    scoreDecayDistanceKm: 6000
+    scoreDecayDistanceKm: 6000,
+    minLandOrWaterRatio: 0.15
   },
   normal: {
     label: "보통",
     widthKm: 1000,
     minCoastlineLengthKm: 100,
-    scoreDecayDistanceKm: 5000
+    scoreDecayDistanceKm: 5000,
+    minLandOrWaterRatio: 0.1
   },
   hard: {
     label: "어려움",
     widthKm: 600,
     minCoastlineLengthKm: 50,
-    scoreDecayDistanceKm: 4000
+    scoreDecayDistanceKm: 4000,
+    minLandOrWaterRatio: 0
   }
 };
 
@@ -223,6 +227,54 @@ function randomCoastalPoint() {
   throw new Error("Failed to sample a coastline within the latitude limits.");
 }
 
+function projectPointToSize(lng, lat, round, width, height) {
+  const kmPerLngDegree = 111.32 * Math.max(0.08, Math.cos(round.centerLat * Math.PI / 180));
+  const dx = normalizeLongitudeDelta(lng - round.centerLng) * kmPerLngDegree;
+  const dy = (lat - round.centerLat) * 111.32;
+  const scale = width / round.widthKm;
+  return [width / 2 + dx * scale, height / 2 - dy * scale];
+}
+
+function calculateLandRatio(round) {
+  const aspect = canvas.width / canvas.height;
+  const width = LAND_RATIO_SAMPLE_WIDTH;
+  const height = Math.round(width / aspect);
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+  const maskContext = maskCanvas.getContext("2d", { willReadFrequently: true });
+  const visibleLand = visibleLinesForRound(round, state.land);
+
+  maskContext.fillStyle = "black";
+  maskContext.fillRect(0, 0, width, height);
+  maskContext.fillStyle = "white";
+  maskContext.beginPath();
+  visibleLand.forEach((line) => {
+    traceLine(
+      maskContext,
+      line,
+      state.land,
+      (lng, lat) => projectPointToSize(lng, lat, round, width, height),
+      0.15
+    );
+  });
+  maskContext.fill("evenodd");
+
+  const pixels = maskContext.getImageData(0, 0, width, height).data;
+  let landPixels = 0;
+  for (let index = 0; index < pixels.length; index += 4) {
+    if (pixels[index] > 127) landPixels += 1;
+  }
+  return landPixels / (width * height);
+}
+
+function hasBalancedLandAndWater(round) {
+  const minimumRatio = DIFFICULTIES[state.difficultyKey].minLandOrWaterRatio;
+  if (minimumRatio <= 0) return true;
+  const landRatio = calculateLandRatio(round);
+  return landRatio >= minimumRatio && landRatio <= 1 - minimumRatio;
+}
+
 function loadRecentQuestions() {
   try {
     const stored = JSON.parse(localStorage.getItem(RECENT_QUESTION_STORAGE_KEY) || "[]");
@@ -254,7 +306,9 @@ function makeRandomRounds() {
     const separatedFromRecent = recentQuestions.every(
       (round) => haversine(round, candidate) > MIN_RECENT_SEPARATION_KM
     );
-    if (separatedFromRound && separatedFromRecent) rounds.push(candidate);
+    if (separatedFromRound && separatedFromRecent && hasBalancedLandAndWater(candidate)) {
+      rounds.push(candidate);
+    }
     attempts += 1;
   }
 
@@ -263,10 +317,15 @@ function makeRandomRounds() {
     const separated = rounds.every(
       (round) => haversine(round, candidate) > MIN_ROUND_SEPARATION_KM
     );
-    if (separated) rounds.push(candidate);
+    if (separated && hasBalancedLandAndWater(candidate)) rounds.push(candidate);
     attempts += 1;
   }
 
+  while (rounds.length < ROUND_COUNT && attempts < 5000) {
+    const candidate = randomCoastalPoint();
+    if (hasBalancedLandAndWater(candidate)) rounds.push(candidate);
+    attempts += 1;
+  }
   while (rounds.length < ROUND_COUNT) rounds.push(randomCoastalPoint());
   saveRecentQuestions(rounds);
   return rounds;
@@ -296,11 +355,7 @@ function visibleLinesForRound(round, dataset) {
 }
 
 function projectPoint(lng, lat, round) {
-  const kmPerLngDegree = 111.32 * Math.max(0.08, Math.cos(round.centerLat * Math.PI / 180));
-  const dx = normalizeLongitudeDelta(lng - round.centerLng) * kmPerLngDegree;
-  const dy = (lat - round.centerLat) * 111.32;
-  const scale = canvas.width / round.widthKm;
-  return [canvas.width / 2 + dx * scale, canvas.height / 2 - dy * scale];
+  return projectPointToSize(lng, lat, round, canvas.width, canvas.height);
 }
 
 function traceLine(context, line, dataset, projector, simplifyPixels = 0) {
