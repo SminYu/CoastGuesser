@@ -238,6 +238,11 @@ function projectPointToSize(lng, lat, round, width, height) {
   return [width / 2 + dx * scale, height / 2 - dy * scale];
 }
 
+function projectedWorldWidth(round, width) {
+  const kmPerLngDegree = 111.32 * Math.max(0.08, Math.cos(round.centerLat * Math.PI / 180));
+  return 360 * kmPerLngDegree * width / round.widthKm;
+}
+
 function calculateLandRatio(round) {
   const aspect = canvas.width / canvas.height;
   const width = LAND_RATIO_SAMPLE_WIDTH;
@@ -253,12 +258,13 @@ function calculateLandRatio(round) {
   maskContext.fillStyle = "white";
   maskContext.beginPath();
   visibleLand.forEach((line) => {
-    traceLine(
+    traceWrappedLine(
       maskContext,
       line,
       state.land,
       (lng, lat) => projectPointToSize(lng, lat, round, width, height),
-      0.15
+      0.15,
+      projectedWorldWidth(round, width)
     );
   });
   maskContext.fill("evenodd");
@@ -361,7 +367,15 @@ function projectPoint(lng, lat, round) {
   return projectPointToSize(lng, lat, round, canvas.width, canvas.height);
 }
 
-function traceLine(context, line, dataset, projector, simplifyPixels = 0) {
+function traceLine(
+  context,
+  line,
+  dataset,
+  projector,
+  simplifyPixels = 0,
+  wrapWidthPixels = Infinity,
+  xOffset = 0
+) {
   const view = dataset.view;
   let previousX = Infinity;
   let previousY = Infinity;
@@ -371,8 +385,13 @@ function traceLine(context, line, dataset, projector, simplifyPixels = 0) {
     const pointOffset = line.pointOffset + index * 16;
     const lng = view.getFloat64(pointOffset, true);
     const lat = view.getFloat64(pointOffset + 8, true);
-    const [x, y] = projector(lng, lat);
+    let [x, y] = projector(lng, lat);
     const isLast = index === line.count - 1;
+
+    if (started && Number.isFinite(wrapWidthPixels)) {
+      while (x - previousX > wrapWidthPixels / 2) x -= wrapWidthPixels;
+      while (x - previousX < -wrapWidthPixels / 2) x += wrapWidthPixels;
+    }
 
     if (
       started
@@ -385,10 +404,10 @@ function traceLine(context, line, dataset, projector, simplifyPixels = 0) {
     }
 
     if (!started) {
-      context.moveTo(x, y);
+      context.moveTo(x + xOffset, y);
       started = true;
     } else {
-      context.lineTo(x, y);
+      context.lineTo(x + xOffset, y);
     }
     previousX = x;
     previousY = y;
@@ -397,8 +416,15 @@ function traceLine(context, line, dataset, projector, simplifyPixels = 0) {
   if (line.closed) context.closePath();
 }
 
+function traceWrappedLine(context, line, dataset, projector, simplifyPixels, wrapWidthPixels) {
+  [-wrapWidthPixels, 0, wrapWidthPixels].forEach((xOffset) => {
+    traceLine(context, line, dataset, projector, simplifyPixels, wrapWidthPixels, xOffset);
+  });
+}
+
 function renderCoast(round) {
   const { width, height } = canvas;
+  const wrapWidth = projectedWorldWidth(round, width);
   const visibleCoastlines = visibleLinesForRound(round, state.coast);
   const visibleLand = visibleLinesForRound(round, state.land);
   const ocean = ctx.createLinearGradient(0, 0, width, height);
@@ -428,7 +454,7 @@ function renderCoast(round) {
   ctx.fillStyle = land;
   ctx.beginPath();
   visibleLand.forEach((line) => {
-    traceLine(ctx, line, state.land, (lng, lat) => projectPoint(lng, lat, round), 0.3);
+    traceWrappedLine(ctx, line, state.land, (lng, lat) => projectPoint(lng, lat, round), 0.3, wrapWidth);
   });
   ctx.fill("evenodd");
 
@@ -439,14 +465,14 @@ function renderCoast(round) {
   ctx.lineCap = "round";
   visibleCoastlines.forEach((line) => {
     ctx.beginPath();
-    traceLine(ctx, line, state.coast, (lng, lat) => projectPoint(lng, lat, round), 0.25);
+    traceWrappedLine(ctx, line, state.coast, (lng, lat) => projectPoint(lng, lat, round), 0.25, wrapWidth);
     ctx.stroke();
   });
   ctx.strokeStyle = "rgba(255, 255, 255, 0.76)";
   ctx.lineWidth = 5;
   visibleCoastlines.forEach((line) => {
     ctx.beginPath();
-    traceLine(ctx, line, state.coast, (lng, lat) => projectPoint(lng, lat, round), 0.2);
+    traceWrappedLine(ctx, line, state.coast, (lng, lat) => projectPoint(lng, lat, round), 0.2, wrapWidth);
     ctx.stroke();
   });
   ctx.restore();
