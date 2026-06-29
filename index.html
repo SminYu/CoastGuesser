@@ -8,7 +8,7 @@
       content="실제 전 세계 해안선 크롭만 보고 위치를 맞히는 지도 추리 게임"
     />
     <title>CoastGuesser</title>
-    <link rel="stylesheet" href="styles.css?v=3" />
+    <link rel="stylesheet" href="styles.css?v=4" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -24,7 +24,7 @@
       <div class="game-stats" aria-label="게임 현황">
         <div>
           <span class="stat-label">ROUND</span>
-          <strong><span id="roundNow">1</span><small>/10</small></strong>
+          <strong><span id="roundNow">1</span><small id="roundTotal">/10</small></strong>
         </div>
         <div class="stat-divider"></div>
         <div>
@@ -39,6 +39,10 @@
       </div>
 
       <div class="top-actions">
+        <button class="difficulty-button" id="modeButton" type="button">
+          <span>MODE</span>
+          <strong id="modeLabel">Classic</strong>
+        </button>
         <button class="difficulty-button" id="difficultyButton" type="button">
           <span>DIFFICULTY</span>
           <strong id="difficultyLabel">보통</strong>
@@ -145,7 +149,11 @@
         </div>
         <div>
           <span>ROUND SCORE</span>
-          <strong><b id="roundScore">0</b><small>/ 100</small></strong>
+          <strong><b id="roundScore">0</b><small id="roundScoreMax">/ 100</small></strong>
+        </div>
+        <div id="timeBonusBlock" hidden>
+          <span>TIME BONUS</span>
+          <strong id="timeBonus">+0</strong>
         </div>
       </div>
       <button class="primary-button result-next" id="nextButton">
@@ -158,7 +166,26 @@
         <button class="modal-close" id="closeDifficulty" aria-label="닫기">×</button>
         <p class="eyebrow">CHOOSE EXPEDITION</p>
         <h2 id="difficultyTitle">난이도를 선택하세요</h2>
-        <p class="difficulty-intro">선택하면 새로운 10라운드 탐사가 시작됩니다.</p>
+        <p class="difficulty-intro">게임 모드와 난이도를 고르면 새로운 탐사가 시작됩니다.</p>
+        <h3 class="modal-section-title">GAME MODE</h3>
+        <div class="mode-grid">
+          <button class="mode-card selected" type="button" data-mode="classic" aria-pressed="true">
+            <span>CLASSIC</span>
+            <strong>10라운드</strong>
+            <small>시간 제한 없음</small>
+          </button>
+          <button class="mode-card" type="button" data-mode="competitive">
+            <span>COMPETITIVE</span>
+            <strong>3분 · 최대 15라운드</strong>
+            <small>5초 안에 제출 시 +10점</small>
+          </button>
+          <button class="mode-card" type="button" data-mode="blitz">
+            <span>BLITZ</span>
+            <strong>1분 · 최대 10라운드</strong>
+            <small>시간 보너스 없음</small>
+          </button>
+        </div>
+        <h3 class="modal-section-title">DIFFICULTY</h3>
         <div class="difficulty-grid">
           <button class="difficulty-card" type="button" data-difficulty="easy">
             <span class="difficulty-visual" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -192,7 +219,7 @@
             <dl>
               <div><dt>화면 폭</dt><dd>600km</dd></div>
               <div><dt>최소 해안</dt><dd>50km</dd></div>
-              <div><dt>육지/바다</dt><dd>허용</dd></div>
+              <div><dt>육지/바다</dt><dd>5%+</dd></div>
               <div><dt>점수 감쇠</dt><dd>4,000km</dd></div>
             </dl>
           </button>
@@ -224,10 +251,15 @@
         <h2 id="endTitle">해안 탐사 완료</h2>
         <p class="end-difficulty">난이도 · <strong id="endDifficulty">보통</strong></p>
         <p id="endMessage">파도만 보고도 지도를 읽는 눈이 생겼네요.</p>
+        <p class="end-difficulty">MODE · <strong id="endMode">Classic</strong></p>
         <div class="final-score">
           <span>FINAL SCORE</span>
           <strong id="finalScore">0</strong>
-          <small>/ 1,000</small>
+          <small id="finalScoreMax">/ 1,000</small>
+        </div>
+        <div class="final-time">
+          <span>ROUNDS PLAYED</span>
+          <strong id="finalRounds">0 / 10</strong>
         </div>
         <div class="final-time">
           <span>PLAY TIME</span>
@@ -237,6 +269,6 @@
       </section>
     </div>
 
-    <script src="app.js?v=4"></script>
+    <script src="app.js?v=5"></script>
   </body>
 </html>

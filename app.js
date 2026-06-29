@@ -1,6 +1,5 @@
 const COAST_DATA_URL = "data/ne_50m_coastline/ne_50m_coastline.shp";
 const LAND_DATA_URL = "data/ne_50m_land/ne_50m_land.shp";
-const ROUND_COUNT = 10;
 const MAX_ROUND_SCORE = 100;
 const EARTH_RADIUS_KM = 6371;
 const SAMPLING_WEIGHT_EXPONENT = 0.3;
@@ -11,6 +10,30 @@ const MIN_RECENT_SEPARATION_KM = 1000;
 const LAND_RATIO_SAMPLE_WIDTH = 160;
 const RECENT_QUESTION_LIMIT = 40;
 const RECENT_QUESTION_STORAGE_KEY = "coastguesser-recent-questions";
+
+const GAME_MODES = {
+  classic: {
+    label: "Classic",
+    roundCount: 10,
+    timeLimitMs: null,
+    timeBonusWindowMs: null,
+    timeBonusPoints: 0
+  },
+  competitive: {
+    label: "Competitive",
+    roundCount: 15,
+    timeLimitMs: 3 * 60 * 1000,
+    timeBonusWindowMs: 5 * 1000,
+    timeBonusPoints: 10
+  },
+  blitz: {
+    label: "Blitz",
+    roundCount: 10,
+    timeLimitMs: 60 * 1000,
+    timeBonusWindowMs: null,
+    timeBonusPoints: 0
+  }
+};
 
 const DIFFICULTIES = {
   easy: {
@@ -32,20 +55,25 @@ const DIFFICULTIES = {
     widthKm: 600,
     minCoastlineLengthKm: 50,
     scoreDecayDistanceKm: 4000,
-    minLandOrWaterRatio: 0
+    minLandOrWaterRatio: 0.05
   }
 };
 
 const state = {
   round: 0,
+  completedRounds: 0,
   score: 0,
   guess: null,
   answered: false,
   ready: false,
   hasStarted: false,
+  ended: false,
   timerId: null,
   timerStartedAt: null,
+  roundStartedAt: null,
   elapsedMs: 0,
+  modeKey: "classic",
+  selectedModeKey: "classic",
   difficultyKey: "normal",
   rounds: [],
   coastSource: null,
@@ -303,11 +331,12 @@ function saveRecentQuestions(rounds) {
 }
 
 function makeRandomRounds() {
+  const roundCount = currentMode().roundCount;
   const rounds = [];
   const recentQuestions = loadRecentQuestions();
   let attempts = 0;
 
-  while (rounds.length < ROUND_COUNT && attempts < 1000) {
+  while (rounds.length < roundCount && attempts < 1000) {
     const candidate = randomCoastalPoint();
     const separatedFromRound = rounds.every(
       (round) => haversine(round, candidate) > MIN_ROUND_SEPARATION_KM
@@ -321,7 +350,7 @@ function makeRandomRounds() {
     attempts += 1;
   }
 
-  while (rounds.length < ROUND_COUNT && attempts < 2000) {
+  while (rounds.length < roundCount && attempts < 2000) {
     const candidate = randomCoastalPoint();
     const separated = rounds.every(
       (round) => haversine(round, candidate) > MIN_ROUND_SEPARATION_KM
@@ -330,12 +359,12 @@ function makeRandomRounds() {
     attempts += 1;
   }
 
-  while (rounds.length < ROUND_COUNT && attempts < 5000) {
+  while (rounds.length < roundCount && attempts < 5000) {
     const candidate = randomCoastalPoint();
     if (hasBalancedLandAndWater(candidate)) rounds.push(candidate);
     attempts += 1;
   }
-  while (rounds.length < ROUND_COUNT) rounds.push(randomCoastalPoint());
+  while (rounds.length < roundCount) rounds.push(randomCoastalPoint());
   saveRecentQuestions(rounds);
   return rounds;
 }
@@ -562,6 +591,18 @@ function scoreForDistance(distance) {
   return Math.round(MAX_ROUND_SCORE * Math.exp(-distance / decayDistance));
 }
 
+function currentMode() {
+  return GAME_MODES[state.modeKey];
+}
+
+function maxRoundScore() {
+  return MAX_ROUND_SCORE + currentMode().timeBonusPoints;
+}
+
+function maxGameScore() {
+  return currentMode().roundCount * maxRoundScore();
+}
+
 function currentLocation() {
   return state.rounds[state.round];
 }
@@ -575,11 +616,21 @@ function formatElapsedTime(milliseconds) {
 
 function currentElapsedMs() {
   if (!state.timerStartedAt) return state.elapsedMs;
-  return Date.now() - state.timerStartedAt;
+  const elapsed = Date.now() - state.timerStartedAt;
+  const limit = currentMode().timeLimitMs;
+  return limit ? Math.min(elapsed, limit) : elapsed;
+}
+
+function remainingTimeMs() {
+  const limit = currentMode().timeLimitMs;
+  if (!limit) return null;
+  return Math.max(0, limit - currentElapsedMs());
 }
 
 function updateTimerDisplay() {
-  $("#gameTimer").textContent = formatElapsedTime(currentElapsedMs());
+  const remaining = remainingTimeMs();
+  $("#gameTimer").textContent = formatElapsedTime(remaining === null ? currentElapsedMs() : remaining);
+  if (remaining === 0 && state.hasStarted && !state.ended) handleTimeExpired();
 }
 
 function stopGameTimer() {
@@ -598,16 +649,24 @@ function startGameTimer() {
   state.elapsedMs = 0;
   state.timerStartedAt = Date.now();
   updateTimerDisplay();
-  state.timerId = setInterval(updateTimerDisplay, 1000);
+  state.timerId = setInterval(updateTimerDisplay, 250);
+}
+
+function handleTimeExpired() {
+  state.ended = true;
+  state.answered = true;
+  showEndScreen("time");
 }
 
 function loadRound() {
   state.guess = null;
   state.answered = false;
+  state.roundStartedAt = Date.now();
   resultLayer.replaceChildren();
   guessPin.setAttribute("visibility", "hidden");
   $("#resultDrawer").classList.remove("open");
   $("#roundNow").textContent = state.round + 1;
+  $("#roundTotal").textContent = `/${state.rounds.length}`;
   $("#fragmentNumber").textContent = `#${String(state.round + 1).padStart(2, "0")}`;
   $("#selectedCoordinates").textContent = "아직 선택하지 않았습니다";
   $("#guessButton").disabled = true;
@@ -652,13 +711,28 @@ function createSvgElement(name, attributes) {
   return element;
 }
 
+function roundTimeBonus() {
+  const mode = currentMode();
+  if (!mode.timeBonusWindowMs || !state.roundStartedAt) return 0;
+  return Date.now() - state.roundStartedAt <= mode.timeBonusWindowMs
+    ? mode.timeBonusPoints
+    : 0;
+}
+
 function revealAnswer() {
-  if (!state.guess || state.answered) return;
+  if (!state.guess || state.answered || state.ended) return;
+  if (remainingTimeMs() === 0) {
+    handleTimeExpired();
+    return;
+  }
   state.answered = true;
   const answer = currentLocation();
   const distance = haversine(state.guess, answer);
-  const roundScore = scoreForDistance(distance);
+  const accuracyScore = scoreForDistance(distance);
+  const timeBonus = roundTimeBonus();
+  const roundScore = accuracyScore + timeBonus;
   state.score += roundScore;
+  state.completedRounds += 1;
   $("#totalScore").textContent = state.score.toLocaleString("ko-KR");
   if (state.round === state.rounds.length - 1) stopGameTimer();
 
@@ -697,6 +771,9 @@ function revealAnswer() {
     `Natural Earth 1:50m 실제 해안선 · ${DIFFICULTIES[state.difficultyKey].label} · 화면 폭 ${Math.round(answer.widthKm)} km`;
   $("#resultDistance").textContent = `${Math.round(distance).toLocaleString("ko-KR")} km`;
   $("#roundScore").textContent = roundScore.toLocaleString("ko-KR");
+  $("#roundScoreMax").textContent = `/ ${maxRoundScore()}`;
+  $("#timeBonus").textContent = `+${timeBonus}`;
+  $("#timeBonusBlock").hidden = currentMode().timeBonusPoints === 0;
   $("#nextButton span:first-child").textContent =
     state.round === state.rounds.length - 1 ? "최종 결과 보기" : "다음 해안선";
   $("#resultDrawer").classList.add("open");
@@ -705,6 +782,11 @@ function revealAnswer() {
 }
 
 function nextRound() {
+  if (state.ended) return;
+  if (remainingTimeMs() === 0) {
+    handleTimeExpired();
+    return;
+  }
   if (state.round < state.rounds.length - 1) {
     state.round += 1;
     loadRound();
@@ -714,18 +796,25 @@ function nextRound() {
   showEndScreen();
 }
 
-function showEndScreen() {
+function showEndScreen(reason = "complete") {
+  state.ended = true;
   $("#resultDrawer").classList.remove("open");
   if (state.timerStartedAt) stopGameTimer();
   $("#finalScore").textContent = state.score.toLocaleString("ko-KR");
   $("#finalTime").textContent = formatElapsedTime(state.elapsedMs);
+  $("#finalScoreMax").textContent = `/ ${maxGameScore().toLocaleString("ko-KR")}`;
+  $("#finalRounds").textContent = `${state.completedRounds} / ${state.rounds.length}`;
+  $("#endMode").textContent = currentMode().label;
   $("#endDifficulty").textContent = DIFFICULTIES[state.difficultyKey].label;
-  const ratio = state.score / (ROUND_COUNT * MAX_ROUND_SCORE);
+  const ratio = state.score / maxGameScore();
   $("#endMessage").textContent = ratio > 0.75
     ? "놀라운 해안 감각입니다. 전 세계의 작은 곡선까지 정확히 읽어냈어요."
     : ratio > 0.45
       ? "좋은 항해였습니다. 실제 해안선의 패턴이 눈에 들어오기 시작했네요."
       : "전 세계 무작위 해안은 만만치 않죠. 다음 게임에는 완전히 새로운 지점들이 나옵니다.";
+  if (reason === "time") {
+    $("#endMessage").textContent = "시간 종료! 제한 시간 안에서 기록한 점수와 라운드가 이번 탐사의 최종 결과입니다.";
+  }
   $("#endModal").hidden = false;
 }
 
@@ -737,7 +826,17 @@ function updateDifficultySelection() {
   });
 }
 
+function updateModeSelection() {
+  document.querySelectorAll("[data-mode]").forEach((button) => {
+    const selected = button.dataset.mode === state.selectedModeKey;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+}
+
 function openDifficultyModal() {
+  state.selectedModeKey = state.modeKey;
+  updateModeSelection();
   updateDifficultySelection();
   $("#difficultyModal").hidden = false;
   $("#closeDifficulty").hidden = !state.hasStarted;
@@ -745,19 +844,29 @@ function openDifficultyModal() {
 
 function startGame(difficultyKey = state.difficultyKey) {
   if (!state.ready) return;
+  state.modeKey = state.selectedModeKey;
   state.difficultyKey = difficultyKey;
   const difficulty = DIFFICULTIES[difficultyKey];
+  const mode = currentMode();
   state.coast = prepareCoastlineSamplingPool(
     state.coastSource,
     difficulty.minCoastlineLengthKm
   );
   state.hasStarted = true;
+  state.ended = false;
   state.round = 0;
+  state.completedRounds = 0;
   state.score = 0;
+  state.roundStartedAt = null;
   state.rounds = makeRandomRounds();
   $("#totalScore").textContent = "0";
   $("#finalTime").textContent = formatElapsedTime(0);
+  $("#roundTotal").textContent = `/${mode.roundCount}`;
+  $("#roundScoreMax").textContent = `/ ${maxRoundScore()}`;
+  $("#timeBonusBlock").hidden = mode.timeBonusPoints === 0;
+  $("#modeLabel").textContent = mode.label;
   $("#difficultyLabel").textContent = difficulty.label;
+  updateModeSelection();
   updateDifficultySelection();
   $("#difficultyModal").hidden = true;
   $("#endModal").hidden = true;
@@ -806,9 +915,16 @@ $("#restartButton").addEventListener("click", () => {
   openDifficultyModal();
 });
 
+$("#modeButton").addEventListener("click", openDifficultyModal);
 $("#difficultyButton").addEventListener("click", openDifficultyModal);
 $("#closeDifficulty").addEventListener("click", () => {
   if (state.hasStarted) $("#difficultyModal").hidden = true;
+});
+document.querySelectorAll("[data-mode]").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.selectedModeKey = button.dataset.mode;
+    updateModeSelection();
+  });
 });
 document.querySelectorAll("[data-difficulty]").forEach((button) => {
   button.addEventListener("click", () => startGame(button.dataset.difficulty));
@@ -832,7 +948,10 @@ document.addEventListener("keydown", (event) => {
     $("#helpModal").hidden = true;
     if (state.hasStarted) $("#difficultyModal").hidden = true;
   }
-  if (event.key === "Enter" && state.guess && !state.answered) revealAnswer();
+  if (event.key === "Enter" && $("#difficultyModal").hidden && $("#helpModal").hidden && $("#endModal").hidden) {
+    if (state.guess && !state.answered) revealAnswer();
+    else if (state.answered && $("#resultDrawer").classList.contains("open")) nextRound();
+  }
 });
 
 initialize();
