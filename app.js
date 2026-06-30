@@ -644,8 +644,25 @@ function stopGameTimer() {
   return state.elapsedMs;
 }
 
-function startGameTimer() {
-  stopGameTimer();
+function pauseGameTimer() {
+  if (!state.timerStartedAt) return state.elapsedMs;
+  state.elapsedMs = currentElapsedMs();
+  state.timerStartedAt = null;
+  updateTimerDisplay();
+  return state.elapsedMs;
+}
+
+function resumeGameTimer() {
+  if (state.ended || state.timerStartedAt) return;
+  state.timerStartedAt = Date.now() - state.elapsedMs;
+  updateTimerDisplay();
+}
+
+function resetGameTimer() {
+  if (state.timerId) {
+    clearInterval(state.timerId);
+    state.timerId = null;
+  }
   state.elapsedMs = 0;
   state.timerStartedAt = Date.now();
   updateTimerDisplay();
@@ -734,7 +751,7 @@ function revealAnswer() {
   state.score += roundScore;
   state.completedRounds += 1;
   $("#totalScore").textContent = state.score.toLocaleString("ko-KR");
-  if (state.round === state.rounds.length - 1) stopGameTimer();
+  pauseGameTimer();
 
   const guessPoint = latLngToMap(state.guess.lat, state.guess.lng);
   const answerPoint = latLngToMap(answer.lat, answer.lng);
@@ -790,6 +807,7 @@ function nextRound() {
   if (state.round < state.rounds.length - 1) {
     state.round += 1;
     loadRound();
+    resumeGameTimer();
     window.scrollTo({ top: 0, behavior: "smooth" });
     return;
   }
@@ -870,7 +888,7 @@ function startGame(difficultyKey = state.difficultyKey) {
   updateDifficultySelection();
   $("#difficultyModal").hidden = true;
   $("#endModal").hidden = true;
-  startGameTimer();
+  resetGameTimer();
   loadRound();
 }
 
